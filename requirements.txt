@@ -12,3 +12,14 @@ yfinance
 ta
 optuna
 matplotlib
+streamlit
+fastapi
+uvicorn[standard]
+pandas
+numpy
+lightgbm
+yfinance
+scikit-learn
+joblib
+requests
+python-dotenv
