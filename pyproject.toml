@@ -1,0 +1,6 @@
+[project]
+name = "quantcore"
+version = "0.1.0"
+
+[tool.setuptools]
+packages = ["data", "features", "models", "execution", "serving"]
