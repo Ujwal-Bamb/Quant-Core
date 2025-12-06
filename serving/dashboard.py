@@ -4,6 +4,7 @@
 import os
 import sys
 
+# Add project root so "data", "models", "features" import correctly
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
@@ -28,32 +29,31 @@ st.title("🚀 Quant-Core AI Trading Dashboard")
 market = SyntheticMarket()
 regime_detector = RegimeDetector()
 
-# Session state
-if "history" not in st.session_state:
-    st.session_state.history = []
+# =====================================================
+# AUTO-GENERATE INITIAL PRICE HISTORY (60 ticks minimum)
+# =====================================================
+if "history" not in st.session_state or len(st.session_state.history) < 60:
+    st.session_state.history = [market.get_tick() for _ in range(60)]
 
-# Sidebar
+# Sidebar buttons
 if st.sidebar.button("Generate Tick"):
     st.session_state.history.append(market.get_tick())
 
 predict = st.sidebar.button("Run Prediction")
 
-# Tabs
+# Main UI Tabs
 tab1, tab2 = st.tabs(["📊 Market Chart", "🤖 Model Output"])
 
 # -------------------------
-# MARKET CHART
+# MARKET CHART TAB
 # -------------------------
 with tab1:
     st.subheader("Market Price History")
-    if len(st.session_state.history) == 0:
-        st.info("Click Generate Tick to start")
-    else:
-        df = pd.DataFrame(st.session_state.history, columns=["price"])
-        st.line_chart(df["price"])
+    df = pd.DataFrame(st.session_state.history, columns=["price"])
+    st.line_chart(df["price"])
 
 # -------------------------
-# AI MODEL OUTPUT
+# MODEL OUTPUT TAB
 # -------------------------
 with tab2:
     st.subheader("AI Prediction")
@@ -67,14 +67,17 @@ with tab2:
             df_hist["target"] = (df_hist["close"].shift(-5) > df_hist["close"]).astype(int)
             df_hist = df_hist.dropna()
 
+            # Train model
             model = TabularModel()
             model.train(df_hist[["close"]], df_hist["target"])
 
             latest = df_hist["close"].iloc[-1]
             p = model.predict([[latest]])[0]
 
+            # Regime detection
             regime = regime_detector.predict(df_hist["close"].pct_change().dropna())
 
+            # Display results
             st.metric("Latest Price", f"${latest:,.2f}")
             st.metric("Prob Up", f"{p:.2%}")
             st.metric("Regime", str(regime))
@@ -85,3 +88,4 @@ with tab2:
                 st.info("HOLD")
 
 st.caption("Quant-Core Streamlit Demo")
+
