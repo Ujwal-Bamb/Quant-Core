@@ -3,7 +3,6 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-
 def download_ohlcv(symbol="AAPL", period="60d", interval="1m"):
     df = yf.download(symbol, period=period, interval=interval, progress=False)
     if df.empty:
