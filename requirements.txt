@@ -1,3 +1,4 @@
+# Core numerical + ML stack
 numpy
 pandas
 scipy
@@ -5,21 +6,22 @@ scikit-learn
 lightgbm
 torch
 transformers
-fastapi
-uvicorn
-streamlit
+joblib
+optuna
+
+# Finance & technical indicators
 yfinance
 ta
-optuna
-matplotlib
-streamlit
+
+# Web backend (API server)
 fastapi
 uvicorn[standard]
-pandas
-numpy
-lightgbm
-yfinance
-scikit-learn
-joblib
-requests
 python-dotenv
+requests
+
+# Frontend (dashboard)
+streamlit
+matplotlib
+
+# Optional: for optimization + research
+# jupyter
