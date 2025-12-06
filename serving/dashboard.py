@@ -1,76 +1,132 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import requests
 from data.synthetic import SyntheticMarket
 from models.zoo import TabularModel
 from features.regimes import RegimeDetector
 
 st.set_page_config(page_title="Quant-Core Dashboard", layout="wide")
 
-st.title("📈 Quant-Core Live Trading Dashboard")
+st.title("📈 Quant-Core Options Trading Dashboard")
 
-# -------------------------------
-# MODEL SETUP (Simple for demo)
-# -------------------------------
+# ---------------------------------
+# Initialize system
+# ---------------------------------
 market = SyntheticMarket()
 rd = RegimeDetector()
 
-st.sidebar.header("Controls")
-run_simulation = st.sidebar.button("Generate Synthetic Price Tick")
-run_model = st.sidebar.button("Run Prediction")
-
-# Session state
 if "price_history" not in st.session_state:
     st.session_state.price_history = []
 
-# ---------------------------------
-# Generate Synthetic Market Tick
-# ---------------------------------
-if run_simulation:
-    new_price = market.get_tick()
-    st.session_state.price_history.append(new_price)
+if "position" not in st.session_state:
+    st.session_state.position = None  # store active trade
 
-# Convert to DataFrame
-if len(st.session_state.price_history) > 0:
-    df = pd.DataFrame(st.session_state.price_history, columns=["price"])
-    df["returns"] = df["price"].pct_change()
-
-    st.subheader("📊 Price History")
-    st.line_chart(df["price"])
+# Sidebar
+st.sidebar.header("Controls")
+run_tick = st.sidebar.button("Generate Tick")
+run_predict = st.sidebar.button("Run ML Prediction")
 
 # ---------------------------------
-# Prediction Example
+# Step 1: Generate market tick
 # ---------------------------------
-if run_model and len(st.session_state.price_history) > 60:
-    # Simple model use
+if run_tick:
+    price = market.get_tick()
+    st.session_state.price_history.append(price)
+
+if len(st.session_state.price_history) == 0:
+    st.info("Click 'Generate Tick' to start simulation.")
+    st.stop()
+
+df = pd.DataFrame(st.session_state.price_history, columns=["price"])
+df["returns"] = df["price"].pct_change()
+
+st.subheader("📊 Price History")
+st.line_chart(df["price"])
+
+# ---------------------------------
+# Step 2: Generate option chain (synthetic)
+# ---------------------------------
+latest_price = st.session_state.price_history[-1]
+chain = market.generate_option_chain(latest_price, "2024-01-01")
+
+st.subheader("📝 Option Chain (ATM Highlighted)")
+chain_display = chain.copy()
+chain_display["mid"] = (chain_display["bid"] + chain_display["ask"]) / 2
+
+# Identify ATM call
+atm_idx = (chain_display["strike"] - latest_price).abs().idxmin()
+atm_option = chain_display.loc[atm_idx]
+
+st.dataframe(chain_display)
+
+st.write(f"🎯 **ATM Call Selected:** Strike {atm_option['strike']} | Mid ${atm_option['mid']:.2f}")
+
+# ---------------------------------
+# Step 3: ML Prediction + Signal
+# ---------------------------------
+st.subheader("🤖 Trading Signal")
+
+if run_predict and len(df) > 60:
     model = TabularModel()
 
-    # Fake training
-    df_hist = pd.DataFrame(st.session_state.price_history, columns=['close'])
-    df_hist["target"] = (df_hist["close"].shift(-5) > df_hist["close"]).astype(int)
+    df_hist = df.copy()
+    df_hist["target"] = (df_hist["price"].shift(-5) > df_hist["price"]).astype(int)
     df_hist = df_hist.dropna()
 
-    model.train(df_hist[["close"]], df_hist["target"])
+    model.train(df_hist[["price"]], df_hist["target"])
 
-    # Run prediction on latest tick
-    latest_price = st.session_state.price_history[-1]
     prob = model.predict([[latest_price]])[0]
+    regime = rd.predict(df_hist["returns"].dropna())
 
-    regime = rd.predict(df_hist["close"].pct_change().dropna())
+    st.metric("Latest Price", f"${latest_price:.2f}")
+    st.metric("Prob Up", f"{prob:.2%}")
+    st.metric("Regime", regime)
 
-    st.subheader("🤖 Model Output")
-    st.metric("Latest Price", f"${latest_price:,.2f}")
-    st.metric("Probability Up", f"{prob:.2%}")
-    st.metric("Regime", str(regime))
+    buy_signal = (prob > 0.6 and regime != 2)
 
-    if prob > 0.6:
-        st.success("Signal: BUY CALL")
+    if st.session_state.position is None:  
+        if buy_signal:
+            st.success("🔥 BUY SIGNAL TRIGGERED — Buying ATM Call")
+
+            st.session_state.position = {
+                "strike": atm_option["strike"],
+                "entry_price": atm_option["ask"],
+                "type": "CALL",
+                "qty": 1
+            }
+        else:
+            st.info("HOLD — No Buy Signal")
     else:
-        st.info("Signal: HOLD")
+        st.info("Already in a position → checking sell conditions...")
+
+        # Compute live P&L
+        current_mid = atm_option["mid"]
+        entry = st.session_state.position["entry_price"]
+        pnl_pct = (current_mid - entry) / entry * 100
+
+        st.metric("Position P/L %", f"{pnl_pct:.2f}%")
+
+        if pnl_pct > 20:
+            st.success("🚀 SELL SIGNAL — Profit Target Hit! Closing Position.")
+            st.session_state.position = None
+
+        elif pnl_pct < -10:
+            st.error("⚠️ STOP LOSS — Selling to prevent more loss.")
+            st.session_state.position = None
 
 else:
-    st.info("Need at least 60 price ticks to run model.")
+    st.info("Generate ticks → then click Run Prediction (requires >60 ticks).")
+
+# ---------------------------------
+# Display active position
+# ---------------------------------
+st.write("---")
+st.subheader("📦 Current Position")
+
+if st.session_state.position:
+    st.json(st.session_state.position)
+else:
+    st.info("No active positions.")
 
 st.write("---")
-st.caption("Quant-Core Research Dashboard — Synthetic Demo Mode")
+st.caption("Quant-Core Live Options Signal Simulator")
