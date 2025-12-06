@@ -1,140 +1,146 @@
+# -------------------------------------------------------
+# FIX: Add project root to Python path for module imports
+# -------------------------------------------------------
 import os
 import sys
 
-# Add project root to Python path
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(ROOT_DIR)
-import sys, os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, ROOT_DIR)
+
+# Print for debugging (optional)
+print("ROOT DIR:", ROOT_DIR)
+
+# -------------------------------------------------------
+# Imports
+# -------------------------------------------------------
 import streamlit as st
 import pandas as pd
 import numpy as np
+
 from data.synthetic import SyntheticMarket
 from models.zoo import TabularModel
 from features.regimes import RegimeDetector
 
-st.set_page_config(page_title="Quant-Core Dashboard", layout="wide")
+# -------------------------------------------------------
+# Streamlit Page Settings
+# -------------------------------------------------------
+st.set_page_config(
+    page_title="Quant-Core Trading Dashboard",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-st.title("📈 Quant-Core Options Trading Dashboard")
+# Custom CSS (Website-like UI)
+st.markdown("""
+    <style>
+    .main { background-color: #0e1117; color: white; }
+    h1, h2, h3 { color: #fafafa !important; }
+    .stMetric { background-color: #1e2130; padding: 15px; border-radius: 10px; }
+    </style>
+""", unsafe_allow_html=True)
 
-# ---------------------------------
-# Initialize system
-# ---------------------------------
+# -------------------------------------------------------
+# Title
+# -------------------------------------------------------
+st.markdown("<h1 style='text-align:center;'>🚀 Quant-Core AI Trading Dashboard</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center;color:#ccc;'>Synthetic Market • AI Predictions • Regime Detection</p>", unsafe_allow_html=True)
+
+# -------------------------------------------------------
+# Initialize Objects
+# -------------------------------------------------------
 market = SyntheticMarket()
 rd = RegimeDetector()
 
-if "price_history" not in st.session_state:
-    st.session_state.price_history = []
-
-if "position" not in st.session_state:
-    st.session_state.position = None  # store active trade
-
-# Sidebar
+# Sidebar Controls
 st.sidebar.header("Controls")
-run_tick = st.sidebar.button("Generate Tick")
-run_predict = st.sidebar.button("Run ML Prediction")
+simulate = st.sidebar.button("📈 Generate Price Tick")
+predict = st.sidebar.button("🤖 Run Prediction")
 
-# ---------------------------------
-# Step 1: Generate market tick
-# ---------------------------------
-if run_tick:
+# Session State
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+# Add synthetic price
+if simulate:
     price = market.get_tick()
-    st.session_state.price_history.append(price)
+    st.session_state.history.append(price)
 
-if len(st.session_state.price_history) == 0:
-    st.info("Click 'Generate Tick' to start simulation.")
-    st.stop()
+# DataFrame
+history = st.session_state.history
 
-df = pd.DataFrame(st.session_state.price_history, columns=["price"])
-df["returns"] = df["price"].pct_change()
+# -------------------------------------------------------
+# Dashboard Tabs
+# -------------------------------------------------------
+tab1, tab2, tab3 = st.tabs(["📊 Market Chart", "🤖 AI Model Output", "ℹ️ System Info"])
 
-st.subheader("📊 Price History")
-st.line_chart(df["price"])
+# ---------------- TAB 1: Chart --------------------------
+with tab1:
+    st.header("Market Price Chart")
 
-# ---------------------------------
-# Step 2: Generate option chain (synthetic)
-# ---------------------------------
-latest_price = st.session_state.price_history[-1]
-chain = market.generate_option_chain(latest_price, "2024-01-01")
-
-st.subheader("📝 Option Chain (ATM Highlighted)")
-chain_display = chain.copy()
-chain_display["mid"] = (chain_display["bid"] + chain_display["ask"]) / 2
-
-# Identify ATM call
-atm_idx = (chain_display["strike"] - latest_price).abs().idxmin()
-atm_option = chain_display.loc[atm_idx]
-
-st.dataframe(chain_display)
-
-st.write(f"🎯 **ATM Call Selected:** Strike {atm_option['strike']} | Mid ${atm_option['mid']:.2f}")
-
-# ---------------------------------
-# Step 3: ML Prediction + Signal
-# ---------------------------------
-st.subheader("🤖 Trading Signal")
-
-if run_predict and len(df) > 60:
-    model = TabularModel()
-
-    df_hist = df.copy()
-    df_hist["target"] = (df_hist["price"].shift(-5) > df_hist["price"]).astype(int)
-    df_hist = df_hist.dropna()
-
-    model.train(df_hist[["price"]], df_hist["target"])
-
-    prob = model.predict([[latest_price]])[0]
-    regime = rd.predict(df_hist["returns"].dropna())
-
-    st.metric("Latest Price", f"${latest_price:.2f}")
-    st.metric("Prob Up", f"{prob:.2%}")
-    st.metric("Regime", regime)
-
-    buy_signal = (prob > 0.6 and regime != 2)
-
-    if st.session_state.position is None:  
-        if buy_signal:
-            st.success("🔥 BUY SIGNAL TRIGGERED — Buying ATM Call")
-
-            st.session_state.position = {
-                "strike": atm_option["strike"],
-                "entry_price": atm_option["ask"],
-                "type": "CALL",
-                "qty": 1
-            }
-        else:
-            st.info("HOLD — No Buy Signal")
+    if len(history) == 0:
+        st.info("Click 'Generate Price Tick' to begin simulation.")
     else:
-        st.info("Already in a position → checking sell conditions...")
+        df = pd.DataFrame(history, columns=["Price"])
+        st.line_chart(df["Price"])
 
-        # Compute live P&L
-        current_mid = atm_option["mid"]
-        entry = st.session_state.position["entry_price"]
-        pnl_pct = (current_mid - entry) / entry * 100
+# ---------------- TAB 2: Prediction ---------------------
+with tab2:
+    st.header("AI Trading Signal")
 
-        st.metric("Position P/L %", f"{pnl_pct:.2f}%")
+    if predict and len(history) > 60:
 
-        if pnl_pct > 20:
-            st.success("🚀 SELL SIGNAL — Profit Target Hit! Closing Position.")
-            st.session_state.position = None
+        # Prepare training data
+        df_hist = pd.DataFrame(history, columns=['close'])
+        df_hist["target"] = (df_hist['close'].shift(-5) > df_hist['close']).astype(int)
+        df_hist = df_hist.dropna()
 
-        elif pnl_pct < -10:
-            st.error("⚠️ STOP LOSS — Selling to prevent more loss.")
-            st.session_state.position = None
+        # Train TabularModel
+        model = TabularModel()
+        model.train(df_hist[['close']], df_hist['target'])
 
-else:
-    st.info("Generate ticks → then click Run Prediction (requires >60 ticks).")
+        # Predict
+        latest_price = history[-1]
+        probability_up = model.predict([[latest_price]])[0]
+        regime = rd.predict(df_hist["close"].pct_change().dropna())
 
-# ---------------------------------
-# Display active position
-# ---------------------------------
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric("Latest Price", f"${latest_price:,.2f}")
+
+        with col2:
+            st.metric("Probability Up", f"{probability_up:.2%}")
+
+        with col3:
+            st.metric("Market Regime", str(regime))
+
+        st.write("---")
+
+        # Trading signal
+        if probability_up > 0.60:
+            st.success("📈 BUY CALL — Model expects bullish movement")
+        else:
+            st.info("⏸ HOLD — No strong signal")
+
+    else:
+        st.info("Generate at least 60 price ticks to run predictions.")
+
+# ---------------- TAB 3: Info ---------------------------
+with tab3:
+    st.header("About Quant-Core")
+    st.write("""
+        Quant-Core is a modular AI-driven trading framework featuring:
+
+        - 🧠 Machine learning (LightGBM / LSTM / Transformers)
+        - 📊 Synthetic market generation (GBM)
+        - 🔍 Regime classification (GMM/HMM)
+        - 💹 Backtesting engine
+        - 🌐 FastAPI inference server
+        - 📈 Streamlit dashboard
+
+        This dashboard demonstrates real-time synthetic market simulation and
+        AI-powered trading signals.
+    """)
+
 st.write("---")
-st.subheader("📦 Current Position")
-
-if st.session_state.position:
-    st.json(st.session_state.position)
-else:
-    st.info("No active positions.")
-
-st.write("---")
-st.caption("Quant-Core Live Options Signal Simulator")
+st.caption("Quant-Core Research Dashboard — Streamlit Edition")
