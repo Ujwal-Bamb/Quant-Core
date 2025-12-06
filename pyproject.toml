@@ -1,6 +1,12 @@
+@"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "quantcore"
 version = "0.1.0"
 
-[tool.setuptools]
-packages = ["data", "features", "models", "execution", "serving"]
+[tool.setuptools.packages.find]
+where = ["."]
+"@ | Out-File -FilePath pyproject.toml -Encoding ascii -NoNewline
