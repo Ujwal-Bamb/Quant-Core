@@ -1,0 +1,14 @@
+numpy
+pandas
+scipy
+scikit-learn
+lightgbm
+torch
+transformers
+fastapi
+uvicorn
+streamlit
+yfinance
+ta
+optuna
+matplotlib
