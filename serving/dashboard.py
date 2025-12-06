@@ -1,3 +1,28 @@
+import importlib.util
+import sys
+import os
+
+# -------- FIX FOR WINDOWS PATHS --------
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_PATH = os.path.join(ROOT, "data", "synthetic.py")
+MODELS_PATH = os.path.join(ROOT, "models", "zoo.py")
+FEATURES_PATH = os.path.join(ROOT, "features", "regimes.py")
+
+def load_module(module_name, module_path):
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+synthetic = load_module("synthetic", DATA_PATH)
+zoo = load_module("zoo", MODELS_PATH)
+regimes = load_module("regimes", FEATURES_PATH)
+
+SyntheticMarket = synthetic.SyntheticMarket
+TabularModel = zoo.TabularModel
+RegimeDetector = regimes.RegimeDetector
+
 # ============================================================
 # FIX PATHS SO STREAMLIT CAN IMPORT data/, models/, features/
 # ============================================================
