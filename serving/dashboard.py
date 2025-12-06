@@ -1,38 +1,22 @@
-import os
-print(">>> RUNNING FROM:", os.getcwd())
-
+# ============================================
+# FIX IMPORT PATHS FOR LOCAL PACKAGE STRUCTURE
+# ============================================
 import os
 import sys
-import importlib.util
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+print(">>> PROJECT ROOT ADDED:", ROOT)
 
-print(">>> ROOT:", ROOT)
+# Normal imports now work
+from data.synthetic import SyntheticMarket
+from models.zoo import TabularModel
+from features.regimes import RegimeDetector
 
-
-def load(path, name):
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-# Load synthetic.py manually
-synthetic = load(os.path.join(ROOT, "data", "synthetic.py"), "synthetic")
-# Load zoo.py manually
-zoo = load(os.path.join(ROOT, "models", "zoo.py"), "zoo")
-# Load regimes.py manually
-regimes = load(os.path.join(ROOT, "features", "regimes.py"), "regimes")
-
-SyntheticMarket = synthetic.SyntheticMarket
-TabularModel = zoo.TabularModel
-RegimeDetector = regimes.RegimeDetector
-
-
-# ============================================================
+# ============================================
 # STREAMLIT STARTS HERE
-# ============================================================
+# ============================================
 
 import streamlit as st
 import pandas as pd
@@ -44,6 +28,7 @@ st.title("🚀 Quant-Core AI Trading Dashboard")
 market = SyntheticMarket()
 regime_detector = RegimeDetector()
 
+# Session state
 if "history" not in st.session_state:
     st.session_state.history = []
 
@@ -56,6 +41,9 @@ predict = st.sidebar.button("Run Prediction")
 # Tabs
 tab1, tab2 = st.tabs(["📊 Market Chart", "🤖 Model Output"])
 
+# -------------------------
+# MARKET CHART
+# -------------------------
 with tab1:
     st.subheader("Market Price History")
     if len(st.session_state.history) == 0:
@@ -64,6 +52,9 @@ with tab1:
         df = pd.DataFrame(st.session_state.history, columns=["price"])
         st.line_chart(df["price"])
 
+# -------------------------
+# AI MODEL OUTPUT
+# -------------------------
 with tab2:
     st.subheader("AI Prediction")
     history = st.session_state.history
