@@ -1,6 +1,5 @@
-# ============================================================
-# FIX WINDOWS IMPORT ISSUES — LOAD MODULES MANUALLY
-# ============================================================
+import os
+print(">>> RUNNING FROM:", os.getcwd())
 
 import os
 import sys
