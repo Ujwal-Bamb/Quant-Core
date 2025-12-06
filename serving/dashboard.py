@@ -1,8 +1,10 @@
-import importlib.util
-import sys
+# ============================================================
+# WINDOWS-PROOF IMPORT FIX — Loads modules by absolute path
+# ============================================================
 import os
+import sys
+import importlib.util
 
-# -------- FIX FOR WINDOWS PATHS --------
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_PATH = os.path.join(ROOT, "data", "synthetic.py")
 MODELS_PATH = os.path.join(ROOT, "models", "zoo.py")
@@ -23,31 +25,17 @@ SyntheticMarket = synthetic.SyntheticMarket
 TabularModel = zoo.TabularModel
 RegimeDetector = regimes.RegimeDetector
 
-# ============================================================
-# FIX PATHS SO STREAMLIT CAN IMPORT data/, models/, features/
-# ============================================================
-import os
-import sys
-
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT_DIR)
-
-print("ROOT DIR:", ROOT_DIR)
 
 # ============================================================
-# IMPORTS
+# STREAMLIT IMPORTS
 # ============================================================
 import streamlit as st
 import pandas as pd
 import numpy as np
 
-from data.synthetic import SyntheticMarket
-from models.zoo import TabularModel
-from features.regimes import RegimeDetector
-
 
 # ============================================================
-# STREAMLIT PAGE SETUP
+# STREAMLIT PAGE CONFIG
 # ============================================================
 st.set_page_config(
     page_title="Quant-Core AI Trading Dashboard",
@@ -66,7 +54,7 @@ st.markdown("<p style='text-align:center;color:#ccc;'>Synthetic Market • AI Pr
 market = SyntheticMarket()
 rd = RegimeDetector()
 
-# Streamlit session state
+# Session state for price history
 if "history" not in st.session_state:
     st.session_state.history = []
 
@@ -75,13 +63,12 @@ if "history" not in st.session_state:
 # SIDEBAR CONTROLS
 # ============================================================
 st.sidebar.header("⚙️ Controls")
-
 simulate = st.sidebar.button("📈 Generate Price Tick")
 predict = st.sidebar.button("🤖 Run Prediction")
 
 
 # ============================================================
-# HANDLE PRICE SIMULATION
+# HANDLE PRICE TICK SIMULATION
 # ============================================================
 if simulate:
     price = market.get_tick()
@@ -103,33 +90,32 @@ with tab1:
     st.header("📊 Market Price History")
 
     if len(history) == 0:
-        st.info("Click **Generate Price Tick** to begin.")
+        st.info("Click **Generate Price Tick** to begin simulation.")
     else:
         df = pd.DataFrame(history, columns=["Price"])
         st.line_chart(df["Price"])
 
 
 # ============================================================
-# TAB 2 — AI MODEL PREDICTIONS
+# TAB 2 — AI MODEL PREDICTION
 # ============================================================
 with tab2:
     st.header("🤖 AI Trading Signals")
 
     if predict and len(history) > 60:
 
-        # Build training DataFrame
+        # Build training dataset
         df_hist = pd.DataFrame(history, columns=['close'])
         df_hist["target"] = (df_hist['close'].shift(-5) > df_hist['close']).astype(int)
         df_hist = df_hist.dropna()
 
-        # Train model (simple LightGBM model)
+        # Train model
         model = TabularModel()
         model.train(df_hist[['close']], df_hist['target'])
 
+        # Latest values
         latest_price = history[-1]
         probability_up = model.predict([[latest_price]])[0]
-
-        # Regime detection
         regime = rd.predict(df_hist["close"].pct_change().dropna())
 
         col1, col2, col3 = st.columns(3)
@@ -145,15 +131,14 @@ with tab2:
 
         st.write("---")
 
-        # Trading signal
+        # Trading decision
         if probability_up > 0.60:
-            st.success("📈 **BUY CALL** — Model expects bullish movement.")
+            st.success("📈 **BUY CALL** — Model expects bullish movement!")
         else:
-            st.info("⏸ **HOLD** — No strong prediction.")
-
+            st.info("⏸ **HOLD** — No strong signal.")
 
     else:
-        st.info("Generate **at least 60 ticks** before running predictions.")
+        st.info("Generate **at least 60 ticks** before running prediction.")
 
 
 # ============================================================
@@ -164,15 +149,16 @@ with tab3:
     st.write("""
         Quant-Core is a modular AI trading system featuring:
 
-        - 🧠 LightGBM, LSTM, Transformer models  
-        - 📉 Synthetic market generator  
-        - 🔍 Regime detection (GMM / volatility clustering)  
-        - 💹 Backtesting engine  
-        - 🌐 FastAPI inference server  
-        - 📊 Streamlit dashboard  
+        - 🧠 ML models (LightGBM, LSTM, Transformers)
+        - 📉 Synthetic market generator (GBM)
+        - 🔍 Regime detector (GMM/HMM-style)
+        - 💹 Event-driven backtester
+        - 🌐 FastAPI model server
+        - 📊 Streamlit monitoring dashboard
 
-        This dashboard demonstrates the synthetic simulation and prediction pipeline.
+        This dashboard demonstrates the simulation + prediction pipeline.
     """)
 
 st.write("---")
 st.caption("Quant-Core — Streamlit Edition (Demo Mode)")
+
